@@ -12,86 +12,93 @@ if (!TOKEN || !DISCORD_WEBHOOK_URL) {
 
 const bot = new Telegraf(TOKEN);
 
-// Функция для извлечения текста из любого сообщения
-function getMessageText(message) {
-    // Текстовое сообщение
-    if (message.text) return message.text;
-    
-    // Сообщение с подписью к медиа
-    if (message.caption) return message.caption;
-    
-    // Разные типы медиа без текста
-    if (message.photo) return '📷 Фото';
-    if (message.video) return '🎥 Видео';
-    if (message.audio) return '🎵 Аудио';
-    if (message.document) return '📄 Документ';
-    if (message.sticker) return `🖼️ Стикер: ${message.sticker.emoji || ''}`;
-    if (message.voice) return '🎙️ Голосовое сообщение';
-    if (message.video_note) return '📹 Кружок';
-    if (message.poll) return '📊 Опрос';
-    if (message.location) return '📍 Геопозиция';
-    if (message.contact) return '👤 Контакт';
-    
-    // Если ничего не подошло
-    return '📨 Новое сообщение';
-}
-
+// Простой обработчик всех сообщений в канале
 bot.on('channel_post', async (ctx) => {
     try {
-        const message = ctx.message;
+        // Проверяем, что сообщение существует
+        if (!ctx.message) {
+            console.log('Нет сообщения');
+            return;
+        }
+
+        const msg = ctx.message;
         const channel = ctx.chat;
         
         // Получаем название канала
-        const channelName = channel.title || channel.username || 'Telegram канал';
-        
-        // Получаем текст сообщения (универсально)
-        const text = getMessageText(message);
-        
-        // Получаем ссылку на сообщение
-        let link = '';
-        if (channel.username) {
-            link = `https://t.me/${channel.username}/${message.message_id}`;
-        } else {
-            link = `https://t.me/c/${channel.id.toString().replace('-100', '')}/${message.message_id}`;
+        let channelName = 'Telegram канал';
+        if (channel && channel.title) {
+            channelName = channel.title;
+        } else if (channel && channel.username) {
+            channelName = `@${channel.username}`;
         }
         
-        // Отправляем в Discord через вебхук
+        // Получаем текст сообщения разными способами
+        let text = '';
+        
+        if (msg.text) {
+            text = msg.text;
+        } else if (msg.caption) {
+            text = msg.caption;
+        } else if (msg.photo) {
+            text = '📷 Отправлено фото';
+        } else if (msg.video) {
+            text = '🎥 Отправлено видео';
+        } else if (msg.audio) {
+            text = '🎵 Отправлена аудиозапись';
+        } else if (msg.document) {
+            text = '📄 Отправлен документ';
+        } else if (msg.sticker) {
+            text = `🖼️ Стикер${msg.sticker.emoji ? `: ${msg.sticker.emoji}` : ''}`;
+        } else if (msg.voice) {
+            text = '🎙️ Голосовое сообщение';
+        } else if (msg.video_note) {
+            text = '📹 Видеосообщение (кружок)';
+        } else {
+            text = '📨 Новое сообщение в канале';
+        }
+        
+        // Создаём ссылку на сообщение
+        let messageLink = '';
+        if (channel && channel.username) {
+            messageLink = `https://t.me/${channel.username}/${msg.message_id}`;
+        } else if (channel && channel.id) {
+            const chatId = String(channel.id).replace('-100', '');
+            messageLink = `https://t.me/c/${chatId}/${msg.message_id}`;
+        }
+        
+        // Формируем сообщение для Discord
+        let discordMessage = `📢 **${channelName}**\n${text}`;
+        if (messageLink) {
+            discordMessage += `\n\n🔗 [Открыть в Telegram](${messageLink})`;
+        }
+        
+        // Отправляем в Discord
         await axios.post(DISCORD_WEBHOOK_URL, {
-            content: `📢 **${channelName}**\n${text}\n\n🔗 [Открыть в Telegram](${link})`
+            content: discordMessage
         });
         
-        console.log(`✅ Отправлено сообщение из канала: ${channelName}`);
+        console.log(`✅ Отправлено в Discord: ${channelName} - ${text.substring(0, 50)}`);
         
     } catch (error) {
-        console.error('❌ Ошибка при отправке:', error.message);
-        
-        // Дополнительная информация об ошибке
+        console.error('❌ Ошибка:', error.message);
         if (error.response) {
             console.error('Ответ Discord:', error.response.data);
         }
     }
 });
 
-// Обработка ошибок бота
-bot.catch((err, ctx) => {
-    console.error('Ошибка бота:', err);
-});
-
 // Запуск бота
-bot.launch().then(() => {
-    console.log('🤖 Telegram бот запущен!');
-}).catch(err => {
-    console.error('Ошибка запуска:', err);
-});
+bot.launch();
+console.log('🤖 Telegram бот запущен и слушает каналы!');
 
 // Веб-сервер для Render
 const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
-app.get('/', (req, res) => res.send('Bot is running!'));
-app.listen(port, () => console.log(`✅ Веб-сервер запущен на порту ${port}`));
+app.get('/', (req, res) => res.send('🤖 Bot is running!'));
+app.listen(port, () => console.log(`✅ Веб-сервер на порту ${port}`));
 
-// Graceful stop
+// Обработка остановки
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
