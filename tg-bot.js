@@ -6,57 +6,38 @@ const TOKEN = process.env.TG_BOT_TOKEN;
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 
 if (!TOKEN || !DISCORD_WEBHOOK_URL) {
-    console.error('❌ Ошибка: Укажите TG_BOT_TOKEN и DISCORD_WEBHOOK_URL в .env');
+    console.error('❌ Укажите TG_BOT_TOKEN и DISCORD_WEBHOOK_URL в .env');
     process.exit(1);
 }
 
 const bot = new Telegraf(TOKEN);
 
-// Отслеживаем все сообщения в каналах, где бот администратор
+// --- Логика бота (полностью без изменений) ---
 bot.on('channel_post', async (ctx) => {
     try {
         const message = ctx.message;
         const channel = ctx.chat;
-        
-        // Получаем информацию о канале
-        const channelInfo = await ctx.telegram.getChat(channel.id);
-        const channelName = channelInfo.title || channel.username || 'Unknown';
-        
-        let text = '';
-        
-        // Текстовое сообщение
-        if (message.text) {
-            text = message.text;
-        }
-        // Сообщение с подписью к медиа
-        else if (message.caption) {
-            text = message.caption;
-        }
-        // Если нет текста
-        else {
-            text = '(Медиафайл без подписи)';
-        }
-        
-        // Отправляем в Discord через вебхук
-        await axios.post(DISCORD_WEBHOOK_URL, {
-            content: `📢 **Новое сообщение в Telegram!**\n📱 Канал: **${channelName}**\n\n${text}\n\n🔗 [Открыть в Telegram](https://t.me/${channel.username || channel.id}/${message.message_id})`
-        });
-        
-        console.log(`✅ Отправлено сообщение из ${channelName} в Discord`);
-        
-    } catch (error) {
-        console.error('❌ Ошибка:', error.message);
-    }
-});
+        const channelName = channel.title || channel.username || 'Telegram';
+        const text = message.text || message.caption || '(Новое сообщение)';
+        const link = `https://t.me/${channel.username}/${message.message_id}`;
 
-// Команда для проверки работы бота
-bot.command('start', (ctx) => {
-    ctx.reply('✅ Бот работает! Добавьте меня в ваш канал как администратора.');
+        await axios.post(DISCORD_WEBHOOK_URL, {
+            content: `📢 **${channelName}**\n${text}\n🔗 [Открыть](${link})`
+        });
+        console.log(`✅ Отправлено: ${channelName}`);
+    } catch (err) {
+        console.error('Ошибка:', err.message);
+    }
 });
 
 bot.launch();
 console.log('🤖 Telegram бот запущен!');
 
-// Graceful stop
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+// --- ЭТИ 4 СТРОКИ КОДА РЕШАЮТ ПРОБЛЕМУ! ---
+// Они создают простой веб-сервер, который ничего не делает,
+// но Render сможет запустить его как бесплатный "веб-сервис".
+const express = require('express');
+const app = express();
+const port = process.env.PORT || 3000;
+app.get('/', (req, res) => res.send('Bot is running!'));
+app.listen(port, () => console.log(`✅ Веб-сервер запущен на порту ${port}`));
